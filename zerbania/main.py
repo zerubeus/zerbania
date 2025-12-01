@@ -422,7 +422,7 @@ async def video(
         separator = "&" if "?" in video_uri else "?"
         download_url = f"{video_uri}{separator}key={GOOGLE_AI_KEY}"
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
             response = await client.get(download_url)
             if response.status_code != 200:
                 await interaction.channel.send(
