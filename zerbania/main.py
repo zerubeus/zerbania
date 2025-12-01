@@ -33,10 +33,12 @@ class TTSBot(commands.Bot):
 
     async def setup_hook(self):
         if GUILD_ID:
-            guild = discord.Object(id=int(GUILD_ID))
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-            print(f"Synced slash commands to guild {GUILD_ID}")
+            guild_ids = [g.strip() for g in GUILD_ID.split(",") if g.strip()]
+            for gid in guild_ids:
+                guild = discord.Object(id=int(gid))
+                self.tree.copy_global_to(guild=guild)
+                await self.tree.sync(guild=guild)
+                print(f"Synced slash commands to guild {gid}")
         else:
             await self.tree.sync()
             print("Synced global slash commands (may take up to 1 hour to appear)")
