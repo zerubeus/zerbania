@@ -3,15 +3,19 @@ import os
 from typing import Optional
 
 import discord
+import httpx
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 from elevenlabs import ElevenLabs
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+GOOGLE_AI_KEY = os.getenv("GOOGLE_AI")
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "Rachel")
 GUILD_ID = os.getenv("GUILD_ID")
 
@@ -22,6 +26,9 @@ class TTSBot(commands.Bot):
         intents.message_content = True
         super().__init__(command_prefix="!", intents=intents)
         self.eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        self.genai_client = (
+            genai.Client(api_key=GOOGLE_AI_KEY) if GOOGLE_AI_KEY else None
+        )
         self.voices_cache: dict[str, str] = {}
 
     async def setup_hook(self):
@@ -129,6 +136,103 @@ async def tts(
 
     except Exception as e:
         await interaction.followup.send(f"Error generating speech: {e}", ephemeral=True)
+
+
+@bot.tree.command(
+    name="img", description="Generate an image from text or modify an uploaded image"
+)
+@app_commands.describe(
+    prompt="Describe the image you want to generate",
+    image="Optional: Upload an image to modify/use as reference",
+)
+async def imagine(
+    interaction: discord.Interaction,
+    prompt: str,
+    image: Optional[discord.Attachment] = None,
+):
+    """Generate an image using Gemini."""
+    if not bot.genai_client:
+        await interaction.response.send_message(
+            "Image generation is not configured. Set GOOGLE_AI in .env",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer()
+
+    try:
+        parts = []
+
+        # If an image is provided, download and include it
+        if image:
+            if not image.content_type or not image.content_type.startswith("image/"):
+                await interaction.followup.send(
+                    "Please upload a valid image file.", ephemeral=True
+                )
+                return
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(image.url)
+                image_bytes = response.content
+
+            parts.append(
+                types.Part.from_bytes(data=image_bytes, mime_type=image.content_type)
+            )
+
+        parts.append(types.Part.from_text(text=prompt))
+
+        contents = [
+            types.Content(
+                role="user",
+                parts=parts,
+            ),
+        ]
+
+        config = types.GenerateContentConfig(
+            response_modalities=["IMAGE", "TEXT"],
+        )
+
+        # Use streaming to get the image
+        image_data = None
+        mime_type = None
+
+        for chunk in bot.genai_client.models.generate_content_stream(
+            model="gemini-3-pro-image-preview",
+            contents=contents,
+            config=config,
+        ):
+            if (
+                chunk.candidates is None
+                or chunk.candidates[0].content is None
+                or chunk.candidates[0].content.parts is None
+            ):
+                continue
+
+            part = chunk.candidates[0].content.parts[0]
+            if part.inline_data and part.inline_data.data:
+                image_data = part.inline_data.data
+                mime_type = part.inline_data.mime_type
+                break
+
+        if not image_data:
+            await interaction.followup.send(
+                "Failed to generate image. Try a different prompt.", ephemeral=True
+            )
+            return
+
+        ext = mime_type.split("/")[-1] if mime_type else "png"
+        image_file = discord.File(
+            io.BytesIO(image_data),
+            filename=f"generated.{ext}",
+        )
+
+        await interaction.followup.send(
+            f"**Prompt:** {prompt[:100]}{'...' if len(prompt) > 100 else ''}",
+            file=image_file,
+        )
+
+    except Exception as e:
+        await interaction.followup.send(f"Error generating image: {e}", ephemeral=True)
 
 
 def main():

@@ -1,15 +1,12 @@
-# Zerbania - Discord TTS Bot
+# Zerbania - Discord Bot
 
-A Discord bot that uses ElevenLabs for high-quality text-to-speech in voice channels.
+A Discord bot with ElevenLabs text-to-speech and Google Gemini image generation.
 
 ## Features
 
-- `/say <text> [voice]` - Generate TTS and play it in your voice channel
-- `/tts <text> [voice]` - Generate TTS and send as an audio file
+- `/tts <text> [voice]` - Generate TTS and send as a playable audio file
 - `/voices` - List all available ElevenLabs voices
-- `/join` - Join your current voice channel
-- `/leave` - Leave the voice channel
-- Voice autocomplete when selecting voices
+- `/img <prompt> [image]` - Generate images from text, or modify uploaded images
 
 ## Setup
 
@@ -17,21 +14,25 @@ A Discord bot that uses ElevenLabs for high-quality text-to-speech in voice chan
 
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
 2. Create a new application
-3. Go to "Bot" section and create a bot
-4. Enable these intents under "Privileged Gateway Intents":
-   - Message Content Intent
+3. Go to **Bot** section and create a bot
+4. Enable **Message Content Intent** under Privileged Gateway Intents
 5. Copy the bot token
-6. Go to "OAuth2" > "URL Generator"
-7. Select scopes: `bot`, `applications.commands`
-8. Select bot permissions: `Connect`, `Speak`, `Send Messages`
-9. Use the generated URL to invite the bot to your server
+6. Go to **Installation** and set Install Link to "Discord Provided Link"
+7. Go to **OAuth2 > URL Generator**:
+   - Scopes: `bot`, `applications.commands`
+   - Permissions: `Send Messages`, `Attach Files`
+8. Use the generated URL to invite the bot to your server
 
-### 2. Get ElevenLabs API Key
+### 2. Get API Keys
 
+**ElevenLabs:**
 1. Go to [ElevenLabs](https://elevenlabs.io/)
-2. Sign up or log in
-3. Go to Settings > API Keys
-4. Create and copy your API key
+2. Sign up and go to Settings > API Keys
+3. Create and copy your API key
+
+**Google AI Studio (for image generation):**
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Get an API key
 
 ### 3. Configure Environment
 
@@ -39,65 +40,45 @@ A Discord bot that uses ElevenLabs for high-quality text-to-speech in voice chan
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your tokens:
+Edit `.env`:
 
 ```
 DISCORD_TOKEN=your_discord_bot_token
 ELEVENLABS_API_KEY=your_elevenlabs_api_key
+GOOGLE_AI=your_google_ai_api_key
 DEFAULT_VOICE=Rachel
+GUILD_ID=your_server_id  # For instant slash command sync
 ```
 
-## Deployment (Docker Compose)
+To get your Guild ID: Enable Developer Mode in Discord settings, then right-click your server > Copy Server ID.
 
-### On your Hetzner server:
+## Deployment (Docker)
 
-1. Clone the repository:
 ```bash
-git clone <your-repo-url>
-cd zerbania
-```
-
-2. Create your `.env` file:
-```bash
-cp .env.example .env
-nano .env  # Add your tokens
-```
-
-3. Start the bot:
-```bash
+# Start
 docker compose up -d
-```
 
-4. View logs:
-```bash
+# View logs
 docker compose logs -f
-```
 
-5. Stop the bot:
-```bash
+# Stop
 docker compose down
-```
 
-6. Update the bot:
-```bash
-git pull
-docker compose up -d --build
+# Update
+git pull && docker compose up -d --build
 ```
 
 ## Local Development
 
 ```bash
-# Install dependencies
 uv sync
-
-# Run the bot
 uv run zerbania
 ```
 
 ## Usage
 
-1. Join a voice channel in your Discord server
-2. Use `/say Hello, this is a test!` to hear TTS
-3. Use `/tts Hello!` to get an audio file instead
-4. Use `/voices` to see all available voices
-5. Use `/say Hello! voice:Brian` to use a specific voice
+- `/tts Hello world!` - Generate speech with default voice
+- `/tts Hello! voice:Brian` - Use a specific voice (autocomplete available)
+- `/voices` - See all available voices
+- `/img A cat wearing a hat` - Generate an image
+- `/img Make this cyberpunk image:[upload]` - Modify an uploaded image
