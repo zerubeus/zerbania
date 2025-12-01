@@ -1,3 +1,5 @@
+import asyncio
+import base64
 import io
 import os
 from typing import Optional
@@ -327,6 +329,118 @@ async def imagine(
 
     except Exception as e:
         await interaction.followup.send(f"Error generating image: {e}", ephemeral=True)
+
+
+@bot.tree.command(name="video", description="Generate a video from a text prompt")
+@app_commands.describe(
+    prompt="Describe the video you want to generate",
+    aspect_ratio="Aspect ratio (default: 16:9)",
+    image="Optional: Starting frame image",
+)
+@app_commands.choices(
+    aspect_ratio=[
+        app_commands.Choice(name="16:9 (Landscape)", value="16:9"),
+        app_commands.Choice(name="9:16 (Portrait)", value="9:16"),
+    ]
+)
+async def video(
+    interaction: discord.Interaction,
+    prompt: str,
+    aspect_ratio: Optional[str] = "16:9",
+    image: Optional[discord.Attachment] = None,
+):
+    """Generate a video using Veo."""
+    if not bot.genai_client:
+        await interaction.response.send_message(
+            "Video generation is not configured. Set GOOGLE_AI in .env",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer()
+
+    try:
+        # Build the request
+        request_params = {
+            "model": "veo-3.1-generate-preview",
+            "prompt": prompt,
+            "config": {
+                "number_of_videos": 1,
+                "aspect_ratio": aspect_ratio,
+                "person_generation": "allow_all",
+            },
+        }
+
+        # If an image is provided, use it as the starting frame
+        if image:
+            if not image.content_type or not image.content_type.startswith("image/"):
+                await interaction.followup.send(
+                    "Please upload a valid image file.", ephemeral=True
+                )
+                return
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(image.url)
+                image_bytes = response.content
+
+            request_params["image"] = {
+                "image_bytes": base64.b64encode(image_bytes).decode(),
+                "mime_type": image.content_type,
+            }
+
+        await interaction.followup.send(
+            f"Starting video generation for: **{prompt[:100]}{'...' if len(prompt) > 100 else ''}**\n"
+            "This may take a few minutes..."
+        )
+
+        # Start video generation
+        operation = bot.genai_client.models.generate_videos(**request_params)
+
+        # Poll until done
+        while not operation.done:
+            await asyncio.sleep(10)
+            operation = bot.genai_client.operations.get(operation)
+
+        if not operation.response or not operation.response.generated_videos:
+            await interaction.channel.send(
+                f"{interaction.user.mention} Video generation failed. Try a different prompt."
+            )
+            return
+
+        generated_video = operation.response.generated_videos[0]
+        if not generated_video.video or not generated_video.video.uri:
+            await interaction.channel.send(
+                f"{interaction.user.mention} Generated video is missing URI."
+            )
+            return
+
+        # Download the video
+        video_uri = generated_video.video.uri
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{video_uri}&key={GOOGLE_AI_KEY}")
+            video_data = response.content
+
+        # Check file size (Discord limit is 25MB for most servers)
+        if len(video_data) > 25 * 1024 * 1024:
+            await interaction.channel.send(
+                f"{interaction.user.mention} Video is too large to upload to Discord (>25MB)."
+            )
+            return
+
+        video_file = discord.File(
+            io.BytesIO(video_data),
+            filename="generated.mp4",
+        )
+
+        await interaction.channel.send(
+            f"{interaction.user.mention} **Prompt:** {prompt[:100]}{'...' if len(prompt) > 100 else ''}",
+            file=video_file,
+        )
+
+    except Exception as e:
+        await interaction.channel.send(
+            f"{interaction.user.mention} Error generating video: {e}"
+        )
 
 
 def main():
