@@ -1,0 +1,23 @@
+[project]
+name = "zerbania"
+version = "0.1.0"
+description = "Discord bot with ElevenLabs text-to-speech integration"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "discord-py>=2.3.0",
+    "elevenlabs>=1.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+zerbania = "zerbania.main:main"
+
+[dependency-groups]
+dev = ["ruff>=0.8.0"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.format]
+quote-style = "double"
