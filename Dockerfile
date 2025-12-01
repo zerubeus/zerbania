@@ -5,7 +5,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /bin/
 
 # Set uv environment variables
 ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    UV_NO_SYNC=1
 
 WORKDIR /app
 
@@ -22,4 +23,4 @@ COPY zerbania/ zerbania/
 RUN uv sync --frozen --no-dev
 
 # Run the bot
-CMD ["uv", "run", "zerbania"]
+CMD ["uv", "run", "python", "-m", "zerbania.main"]
