@@ -56,6 +56,76 @@ class TTSBot(commands.Bot):
         except Exception as e:
             print(f"Failed to load voices: {e}")
 
+    async def on_message(self, message: discord.Message):
+        # Ignore messages from the bot itself
+        if message.author == self.user:
+            return
+
+        # Check if bot was mentioned
+        if self.user not in message.mentions:
+            return
+
+        if not self.genai_client:
+            await message.reply("Chat is not configured. Set GOOGLE_AI in .env")
+            return
+
+        # Remove the bot mention from the message
+        content = message.content
+        for mention in message.mentions:
+            content = content.replace(f"<@{mention.id}>", "").replace(f"<@!{mention.id}>", "")
+        content = content.strip()
+
+        if not content:
+            await message.reply("Hey! Ask me something.")
+            return
+
+        # Show typing indicator
+        async with message.channel.typing():
+            try:
+                contents = [
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_text(text=content),
+                        ],
+                    ),
+                ]
+
+                config = types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(
+                        thinking_budget=1024,
+                    ),
+                )
+
+                # Collect response from stream
+                response_text = ""
+                for chunk in self.genai_client.models.generate_content_stream(
+                    model="gemini-3-pro-preview",
+                    contents=contents,
+                    config=config,
+                ):
+                    if chunk.text:
+                        response_text += chunk.text
+
+                if not response_text:
+                    await message.reply("I couldn't generate a response. Try again.")
+                    return
+
+                # Discord has a 2000 character limit
+                if len(response_text) > 2000:
+                    # Split into chunks
+                    chunks = [response_text[i:i+1990] for i in range(0, len(response_text), 1990)]
+                    for i, chunk in enumerate(chunks):
+                        if i == 0:
+                            await message.reply(chunk)
+                        else:
+                            await message.channel.send(chunk)
+                else:
+                    await message.reply(response_text)
+
+            except Exception as e:
+                await message.reply(f"Error: {e}")
+
 
 bot = TTSBot()
 
