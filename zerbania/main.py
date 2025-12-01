@@ -3,6 +3,7 @@ import base64
 import io
 import os
 from typing import Optional
+from urllib.parse import unquote
 
 import discord
 import httpx
@@ -415,10 +416,27 @@ async def video(
             return
 
         # Download the video
-        video_uri = generated_video.video.uri
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{video_uri}&key={GOOGLE_AI_KEY}")
+        video_uri = unquote(generated_video.video.uri)
+        print(f"Video URI: {video_uri}")
+        # URI may or may not have query params already
+        separator = "&" if "?" in video_uri else "?"
+        download_url = f"{video_uri}{separator}key={GOOGLE_AI_KEY}"
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.get(download_url)
+            if response.status_code != 200:
+                await interaction.channel.send(
+                    f"{interaction.user.mention} Failed to download video: HTTP {response.status_code}"
+                )
+                return
             video_data = response.content
+
+        if len(video_data) < 1000:
+            # Probably an error response, not actual video
+            await interaction.channel.send(
+                f"{interaction.user.mention} Video download failed. Response too small ({len(video_data)} bytes)."
+            )
+            return
 
         # Check file size (Discord limit is 25MB for most servers)
         if len(video_data) > 25 * 1024 * 1024:
